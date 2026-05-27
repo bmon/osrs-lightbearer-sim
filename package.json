@@ -1,0 +1,15 @@
+{
+  "name": "lightbearer-sim",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit && esbuild src/sim.ts --bundle --outfile=dist/sim.js"
+  },
+  "devDependencies": {
+    "@types/d3": "^7.4.3",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "d3": "^7.9.0",
+    "esbuild": "^0.28.0"
+  }
+}

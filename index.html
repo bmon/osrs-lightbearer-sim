@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lightbearer Sim</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px;
+      background: #f8f8f8;
+    }
+    #heat-chart svg,
+    #cum-chart svg {
+      display: block;
+    }
+    #controls {
+      /* left-align with the chart data area: margin-left matches SVG margin.left (110px),
+         right side left alone — colorbar area has no slider */
+      width: 920px;
+      box-sizing: border-box;
+      padding: 10px 0 10px 110px;
+      display: flex;
+      gap: 32px;
+      font-size: 13px;
+    }
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .slider-group input[type="range"] {
+      width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div id="heat-chart"></div>
+  <div id="controls">
+    <div class="slider-group">
+      <label>Min ticks equipped: <strong id="min-label">1 (0.6s)</strong></label>
+      <input type="range" id="min-slider" min="1" max="150" value="1" />
+    </div>
+    <div class="slider-group">
+      <label>Max ticks equipped: <strong id="max-label">150 (90.0s)</strong></label>
+      <input type="range" id="max-slider" min="1" max="150" value="150" />
+    </div>
+  </div>
+  <div id="cum-chart"></div>
+  <script src="dist/sim.js"></script>
+</body>
+</html>
