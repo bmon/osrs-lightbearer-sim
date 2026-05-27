@@ -21,6 +21,7 @@ steps:
       - --region=australia-southeast1
       - --platform=managed
       - --allow-unauthenticated
+      - --service-account=lightbearer-sim-sa@bmon-osrs-multiplot.iam.gserviceaccount.com
       - --project=$PROJECT_ID
 
 options:
