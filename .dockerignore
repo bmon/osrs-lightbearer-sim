@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.venv/
+py_version/
+.git/
+.claude/
+infra/
+*.md
