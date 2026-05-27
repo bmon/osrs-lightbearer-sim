@@ -3194,8 +3194,8 @@
     applyY: function(y) {
       return y * this.k + this.y;
     },
-    invert: function(location) {
-      return [(location[0] - this.x) / this.k, (location[1] - this.y) / this.k];
+    invert: function(location2) {
+      return [(location2[0] - this.x) / this.k, (location2[1] - this.y) / this.k];
     },
     invertX: function(x) {
       return (x - this.x) / this.k;
@@ -3235,7 +3235,7 @@
     }
     let restores = 0;
     for (let i = 0; i < duration; i++) {
-      timer2 += 1;
+      timer2++;
       if (timer2 >= threshold) {
         restores++;
         timer2 = 0;
@@ -3249,9 +3249,7 @@
     for (let p = 0; p < NORMAL_THRESHOLD; p++) {
       net[p] = [];
       for (let d = 1; d <= MAX_DURATION; d++) {
-        const lb = simulateLb(p, d);
-        const normal = (p + d) / NORMAL_THRESHOLD;
-        net[p][d - 1] = (lb - normal) * 10;
+        net[p][d - 1] = (simulateLb(p, d) - (p + d) / NORMAL_THRESHOLD) * 10;
       }
     }
     return net;
@@ -3259,110 +3257,186 @@
   var netPct = computeNetGain();
   var perTickMean = range(MAX_DURATION).map((d) => mean(netPct, (row) => row[d]));
   var fullCumulative = perTickMean.map(/* @__PURE__ */ ((s) => (v) => s += v)(0));
+  var CELL = 7;
+  var innerW = CELL * MAX_DURATION;
+  var heatH = CELL * NORMAL_THRESHOLD;
   var ML = 110;
   var MR = 130;
   var MT = 40;
-  var heatH = 340;
+  var GAP = 40;
   var cumH = 160;
-  var svgW = 920;
-  var innerW = svgW - ML - MR;
-  var cellW = innerW / MAX_DURATION;
-  var cellH = heatH / NORMAL_THRESHOLD;
-  var xScale = linear2().domain([0.5, MAX_DURATION + 0.5]).range([0, innerW]);
-  var yHeat = linear2().domain([-0.5, NORMAL_THRESHOLD - 0.5]).range([0, heatH]);
-  var colorScale = diverging(RdBu_default).domain([-12, 0, 12]);
-  var yCum = linear2().domain([min(fullCumulative) * 1.1, max(fullCumulative) * 1.1]).range([cumH, 0]);
-  var heatSvg = select_default2("#heat-chart").append("svg").attr("width", svgW).attr("height", MT + heatH);
-  var heatG = heatSvg.append("g").attr("transform", `translate(${ML},${MT})`);
-  for (let p = 0; p < NORMAL_THRESHOLD; p++) {
-    for (let d = 0; d < MAX_DURATION; d++) {
-      heatG.append("rect").attr("x", xScale(d + 0.5)).attr("y", yHeat(p - 0.5)).attr("width", cellW).attr("height", cellH).attr("fill", colorScale(netPct[p][d]));
-    }
-  }
-  var greyLeft = heatG.append("rect").attr("y", 0).attr("height", heatH).attr("fill", "rgba(200,200,200,0.82)").attr("display", "none");
-  var greyRight = heatG.append("rect").attr("y", 0).attr("height", heatH).attr("fill", "rgba(200,200,200,0.82)").attr("display", "none");
-  var xTickVals = range(25, MAX_DURATION + 1, 25);
-  heatG.append("g").call(
-    axisTop(xScale).tickValues(xTickVals.map((t) => t - 0.5)).tickFormat((_, i) => `${xTickVals[i]} (${(xTickVals[i] * 0.6).toFixed(0)}s)`)
-  ).selectAll("text").style("font-size", "9px");
-  heatG.append("g").call(
-    axisLeft(yHeat).tickValues(range(0, NORMAL_THRESHOLD + 1, 5).map((t) => t - 0.5)).tickFormat((_, i) => {
-      const t = i * 5;
-      return `${t} (${(t * 0.6).toFixed(0)}s)`;
-    })
-  ).selectAll("text").style("font-size", "9px");
-  heatG.append("text").attr("x", -heatH / 2).attr("y", -90).attr("transform", "rotate(-90)").attr("text-anchor", "middle").style("font-size", "11px").text("Equip position in normal cycle (ticks / seconds)");
-  heatG.append("text").attr("x", innerW / 2).attr("y", -28).attr("text-anchor", "middle").style("font-size", "13px").style("font-weight", "600").text("Lightbearer: spec gain (%) when swapping rings");
-  var heatBreakeven = heatG.append("line").attr("y1", 0).attr("y2", heatH).attr("stroke", "#00aa55").attr("stroke-width", 1.5);
-  var breakevenLabel = heatG.append("text").attr("y", heatH - 8).style("font-size", "10px").style("fill", "#00aa55");
-  var cbW = 14;
+  var BOT = 60;
+  var svgW = ML + innerW + MR;
+  var totalH = MT + heatH + GAP + cumH + BOT;
   var cbX = ML + innerW + 10;
+  var cbW = 14;
   var cbSteps = 100;
   var cbStepH = heatH / cbSteps;
-  var cbStepScale = linear2().domain([0, cbSteps - 1]).range([0, heatH]);
+  var cbStepScale = linear2().domain([0, cbSteps]).range([0, heatH]);
+  var cbLabelX = cbX + cbW + 36;
+  var svg = select_default2("#chart").append("svg").attr("width", svgW).attr("height", totalH).attr("overflow", "visible");
+  var heatG = svg.append("g").attr("transform", `translate(${ML},${MT})`);
+  var cumG = svg.append("g").attr("transform", `translate(${ML},${MT + heatH + GAP})`);
+  var xScale = linear2().domain([0.5, MAX_DURATION + 0.5]).range([0, innerW]);
+  var yHeat = linear2().domain([-0.5, NORMAL_THRESHOLD - 0.5]).range([heatH, 0]);
+  var colorScale = diverging(RdBu_default).domain([-12, 0, 12]);
+  var yCum = linear2().domain([min(fullCumulative) * 1.1, max(fullCumulative) * 1.1]).range([cumH, 0]);
+  var cellData = [];
+  for (let p = 0; p < NORMAL_THRESHOLD; p++) {
+    for (let d = 0; d < MAX_DURATION; d++) {
+      cellData.push({ p, d });
+    }
+  }
+  var tooltip = select_default2("body").append("div").style("position", "absolute").style("pointer-events", "none").style("background", "#fff").style("border", "1px solid #bbb").style("border-radius", "4px").style("padding", "7px 10px").style("font-size", "11px").style("line-height", "1.6").style("box-shadow", "0 2px 8px rgba(0,0,0,0.15)").style("display", "none").style("z-index", "100");
+  var heatCells1 = heatG.selectAll("rect.cell1").data(cellData).join("rect").attr("class", "cell1").attr("x", ({ d }) => d * CELL).attr("y", ({ p }) => (NORMAL_THRESHOLD - 1 - p) * CELL).attr("width", CELL).attr("height", CELL).attr("fill", ({ p, d }) => colorScale(netPct[p][d]));
+  heatCells1.on("mouseover", (event, { p, d }) => {
+    tooltip.style("display", "block").html(
+      `<strong>Equip pos:</strong> ${p} ticks (${(p * 0.6).toFixed(1)}s)<br><strong>Duration:</strong> ${d + 1} ticks (${((d + 1) * 0.6).toFixed(1)}s)<br><strong>Net spec gain:</strong> ${netPct[p][d].toFixed(1)}%`
+    );
+  }).on("mousemove", (event) => {
+    tooltip.style("left", event.pageX + 14 + "px").style("top", event.pageY - 14 + "px");
+  }).on("mouseleave", () => tooltip.style("display", "none"));
+  var greyLeft = heatG.append("rect").attr("y", 0).attr("height", heatH).attr("fill", "rgba(200,200,200,0.82)").attr("display", "none");
+  var xTickVals = range(25, MAX_DURATION + 1, 25);
+  heatG.append("g").call(axisTop(xScale).tickValues(xTickVals.map((t) => t - 0.5)).tickFormat((_, i) => `${xTickVals[i]} (${(xTickVals[i] * 0.6).toFixed(0)}s)`)).selectAll("text").style("font-size", "9px");
+  heatG.append("g").call(axisLeft(yHeat).tickValues(range(0, NORMAL_THRESHOLD + 1, 5).map((t) => t - 0.5)).tickFormat((_, i) => {
+    const t = i * 5;
+    return `${t} (${(t * 0.6).toFixed(0)}s)`;
+  })).selectAll("text").style("font-size", "9px");
+  heatG.append("text").attr("transform", "rotate(-90)").attr("x", -heatH / 2).attr("y", -90).attr("text-anchor", "middle").style("font-size", "11px").text("Equip position in normal cycle (ticks / seconds)");
+  heatG.append("text").attr("x", innerW / 2).attr("y", -22).attr("text-anchor", "middle").style("font-size", "13px").style("font-weight", "600").text("Lightbearer: spec gain (%) when swapping rings");
+  var heatBreakeven = heatG.append("line").attr("y1", 0).attr("y2", heatH).attr("stroke", "#00aa55").attr("stroke-width", 1.5);
+  var breakevenLabel = heatG.append("text").attr("y", heatH - 8).style("font-size", "10px").style("fill", "#00aa55");
   var cbValScale = linear2().domain([0, cbSteps - 1]).range([12, -12]);
   for (let i = 0; i < cbSteps; i++) {
-    heatSvg.append("rect").attr("x", cbX).attr("y", MT + cbStepScale(i)).attr("width", cbW).attr("height", cbStepH + 1).attr("fill", colorScale(cbValScale(i)));
+    svg.append("rect").attr("x", cbX).attr("y", MT + cbStepScale(i)).attr("width", cbW).attr("height", cbStepH).attr("fill", colorScale(cbValScale(i)));
   }
   var cbAxisScale = linear2().domain([12, -12]).range([0, heatH]);
-  heatSvg.append("g").attr("transform", `translate(${cbX + cbW},${MT})`).call(axisRight(cbAxisScale).ticks(5).tickFormat((d) => `${d}%`)).selectAll("text").style("font-size", "9px");
-  var cbLabelX = cbX + cbW + 42;
-  heatSvg.append("text").attr("x", cbLabelX).attr("y", MT + heatH / 2).attr("transform", `rotate(90,${cbLabelX},${MT + heatH / 2})`).attr("text-anchor", "middle").style("font-size", "10px").text("Net gain (% spec energy)");
-  var cumMT = 12;
-  var cumSvgH = cumMT + cumH + 56;
-  var cumSvg = select_default2("#cum-chart").append("svg").attr("width", svgW).attr("height", cumSvgH);
-  var cumG = cumSvg.append("g").attr("transform", `translate(${ML},${cumMT})`);
-  var cumBars = cumG.selectAll("rect.bar").data(range(MAX_DURATION)).join("rect").attr("class", "bar").attr("x", (_, i) => xScale(i + 0.5)).attr("width", cellW);
+  svg.append("g").attr("transform", `translate(${cbX + cbW},${MT})`).call(axisRight(cbAxisScale).tickValues([-12, -6, 0, 6, 12]).tickFormat((d) => `${d}%`)).selectAll("text").style("font-size", "9px");
+  svg.append("text").attr("transform", `rotate(90,${cbLabelX},${MT + heatH / 2})`).attr("x", cbLabelX).attr("y", MT + heatH / 2).attr("text-anchor", "middle").style("font-size", "10px").text("Net gain (% spec energy)");
+  var cumBars = cumG.selectAll("rect.bar").data(range(MAX_DURATION)).join("rect").attr("class", "bar").attr("x", (_, i) => xScale(i + 0.5)).attr("width", CELL);
+  cumBars.on("mouseover", (_event, i) => {
+    const cumVal = fullCumulative[i];
+    tooltip.style("display", "block").html(
+      `<strong>Duration:</strong> ${i + 1} ticks (${((i + 1) * 0.6).toFixed(1)}s)<br><strong>Avg cumulative spec gain:</strong> ${cumVal.toFixed(2)}%`
+    );
+  }).on("mousemove", (event) => {
+    tooltip.style("left", event.pageX + 14 + "px").style("top", event.pageY - 14 + "px");
+  }).on("mouseleave", () => tooltip.style("display", "none"));
   cumG.append("line").attr("x1", 0).attr("x2", innerW).attr("y1", yCum(0)).attr("y2", yCum(0)).attr("stroke", "#888").attr("stroke-width", 0.8);
   yCum.ticks(4).forEach((t) => {
-    cumG.append("line").attr("x1", 0).attr("x2", innerW).attr("y1", yCum(t)).attr("y2", yCum(t)).attr("stroke", "#ccc").attr("stroke-width", 0.5).attr("stroke-dasharray", "2,2");
+    cumG.append("line").attr("x1", 0).attr("x2", innerW).attr("y1", yCum(t)).attr("y2", yCum(t)).attr("stroke", "#ccc").attr("stroke-width", 0.5).attr("stroke-dasharray", "3,3");
   });
   var cumBreakeven = cumG.append("line").attr("y1", 0).attr("y2", cumH).attr("stroke", "#00aa55").attr("stroke-width", 1.5);
-  cumG.append("g").attr("transform", `translate(0,${cumH})`).call(
-    axisBottom(xScale).tickValues(xTickVals.map((t) => t - 0.5)).tickFormat((_, i) => `${xTickVals[i]} (${(xTickVals[i] * 0.6).toFixed(0)}s)`)
-  ).selectAll("text").style("font-size", "9px");
+  cumG.append("g").attr("transform", `translate(0,${cumH})`).call(axisBottom(xScale).tickValues(xTickVals.map((t) => t - 0.5)).tickFormat((_, i) => `${xTickVals[i]} (${(xTickVals[i] * 0.6).toFixed(0)}s)`)).selectAll("text").style("font-size", "9px");
   cumG.append("g").call(axisLeft(yCum).ticks(4).tickFormat((d) => `${+d}%`)).selectAll("text").style("font-size", "9px");
-  cumG.append("text").attr("x", -cumH / 2).attr("y", -90).attr("transform", "rotate(-90)").attr("text-anchor", "middle").style("font-size", "10px").text("Avg cumulative net gain (%)");
+  cumG.append("text").attr("transform", "rotate(-90)").attr("x", -cumH / 2).attr("y", -90).attr("text-anchor", "middle").style("font-size", "10px").text("Avg cumulative net gain (%)");
   cumG.append("text").attr("x", innerW / 2).attr("y", cumH + 46).attr("text-anchor", "middle").style("font-size", "11px").text("Duration worn (ticks)");
-  function filteredCumulative(minTick, maxTick) {
+  var svg2 = select_default2("#chart").append("svg").attr("width", svgW).attr("height", totalH).attr("overflow", "visible").style("display", "block").style("margin-top", "48px");
+  var heatG2 = svg2.append("g").attr("transform", `translate(${ML},${MT})`);
+  var cumG2 = svg2.append("g").attr("transform", `translate(${ML},${MT + heatH + GAP})`);
+  var dpsPlaceholder = heatG2.append("text").attr("x", innerW / 2).attr("y", heatH / 2).attr("text-anchor", "middle").attr("dominant-baseline", "middle").style("font-size", "14px").style("fill", "#999").text("Enter weapon stats above to see damage chart");
+  var heatCells2 = heatG2.selectAll("rect.cell2").data(cellData).join("rect").attr("class", "cell2").attr("x", ({ d }) => d * CELL).attr("y", ({ p }) => (NORMAL_THRESHOLD - 1 - p) * CELL).attr("width", CELL).attr("height", CELL).attr("fill", "#e8e8e8");
+  heatCells2.on("mouseover", (event, { p, d }) => {
+    const { mhAvgHit, mhAvgHitLb, mhSpeed, specAvgHit, specSpeed, specCost } = getInputs();
+    const mhDiff = mhAvgHit - mhAvgHitLb;
+    let extra = "";
+    if (specCost > 0 && specSpeed > 0 && mhSpeed > 0 && mhDiff > 0) {
+      const dmgPerSpec = specAvgHit - mhAvgHit * (specSpeed / mhSpeed);
+      const specDmg = netPct[p][d] / specCost * dmgPerSpec;
+      const lbSwings = specDmg / mhDiff;
+      extra = `<br><strong>Spec gain (dmg):</strong> ${specDmg.toFixed(1)}<br><strong>LB-swing equiv:</strong> ${lbSwings.toFixed(2)}`;
+    }
+    tooltip.style("display", "block").html(
+      `<strong>Equip pos:</strong> ${p} ticks (${(p * 0.6).toFixed(1)}s)<br><strong>Duration:</strong> ${d + 1} ticks (${((d + 1) * 0.6).toFixed(1)}s)<br><strong>Net spec gain:</strong> ${netPct[p][d].toFixed(1)}%` + extra
+    );
+  }).on("mousemove", (event) => {
+    tooltip.style("left", event.pageX + 14 + "px").style("top", event.pageY - 14 + "px");
+  }).on("mouseleave", () => tooltip.style("display", "none"));
+  var greyLeft2 = heatG2.append("rect").attr("y", 0).attr("height", heatH).attr("fill", "rgba(200,200,200,0.82)").attr("display", "none");
+  heatG2.append("g").call(axisTop(xScale).tickValues(xTickVals.map((t) => t - 0.5)).tickFormat((_, i) => `${xTickVals[i]} (${(xTickVals[i] * 0.6).toFixed(0)}s)`)).selectAll("text").style("font-size", "9px");
+  heatG2.append("g").call(axisLeft(yHeat).tickValues(range(0, NORMAL_THRESHOLD + 1, 5).map((t) => t - 0.5)).tickFormat((_, i) => {
+    const t = i * 5;
+    return `${t} (${(t * 0.6).toFixed(0)}s)`;
+  })).selectAll("text").style("font-size", "9px");
+  heatG2.append("text").attr("transform", "rotate(-90)").attr("x", -heatH / 2).attr("y", -90).attr("text-anchor", "middle").style("font-size", "11px").text("Equip position in normal cycle (ticks / seconds)");
+  heatG2.append("text").attr("x", innerW / 2).attr("y", -22).attr("text-anchor", "middle").style("font-size", "13px").style("font-weight", "600").text("Lightbearer: net gain vs DPS ring (LB-swing equivalents)");
+  var heatBreakeven2 = heatG2.append("line").attr("y1", 0).attr("y2", heatH).attr("stroke", "#00aa55").attr("stroke-width", 1.5).attr("display", "none");
+  var breakevenLabel2 = heatG2.append("text").attr("y", heatH - 8).style("font-size", "10px").style("fill", "#00aa55").attr("display", "none");
+  for (let i = 0; i < cbSteps; i++) {
+    svg2.append("rect").attr("class", "cb2").attr("x", cbX).attr("y", MT + cbStepScale(i)).attr("width", cbW).attr("height", cbStepH).attr("fill", "#e8e8e8");
+  }
+  var cbRects2 = svg2.selectAll("rect.cb2").data(range(cbSteps));
+  var cbAxisG2 = svg2.append("g").attr("transform", `translate(${cbX + cbW},${MT})`);
+  svg2.append("text").attr("transform", `rotate(90,${cbLabelX},${MT + heatH / 2})`).attr("x", cbLabelX).attr("y", MT + heatH / 2).attr("text-anchor", "middle").style("font-size", "10px").text("LB-swing equivalents");
+  var yCum2 = linear2().domain([-1, 1]).range([cumH, 0]);
+  var cumBars2 = cumG2.selectAll("rect.bar2").data(range(MAX_DURATION)).join("rect").attr("class", "bar2").attr("x", (_, i) => xScale(i + 0.5)).attr("width", CELL);
+  cumBars2.on("mouseover", (_event, i) => {
+    const { mhAvgHit, mhAvgHitLb, mhSpeed, specAvgHit, specSpeed, specCost } = getInputs();
+    const mhDiff = mhAvgHit - mhAvgHitLb;
+    let extra = "";
+    if (specCost > 0 && specSpeed > 0 && mhSpeed > 0 && mhDiff > 0) {
+      const dmgPerSpec = specAvgHit - mhAvgHit * (specSpeed / mhSpeed);
+      const lbSwings = perTickMean[i] * dmgPerSpec / (specCost * mhDiff);
+      extra = `<br><strong>LB-swing equiv:</strong> ${lbSwings.toFixed(2)}`;
+    }
+    tooltip.style("display", "block").html(
+      `<strong>Duration:</strong> ${i + 1} ticks (${((i + 1) * 0.6).toFixed(1)}s)<br><strong>Avg net spec gain:</strong> ${perTickMean[i].toFixed(2)}%` + extra
+    );
+  }).on("mousemove", (event) => {
+    tooltip.style("left", event.pageX + 14 + "px").style("top", event.pageY - 14 + "px");
+  }).on("mouseleave", () => tooltip.style("display", "none"));
+  var cumBaseline2 = cumG2.append("line").attr("x1", 0).attr("x2", innerW).attr("stroke", "#888").attr("stroke-width", 0.8);
+  var cumGridG2 = cumG2.append("g");
+  var cumBreakeven2 = cumG2.append("line").attr("y1", 0).attr("y2", cumH).attr("stroke", "#00aa55").attr("stroke-width", 1.5).attr("display", "none");
+  cumG2.append("g").attr("transform", `translate(0,${cumH})`).call(axisBottom(xScale).tickValues(xTickVals.map((t) => t - 0.5)).tickFormat((_, i) => `${xTickVals[i]} (${(xTickVals[i] * 0.6).toFixed(0)}s)`)).selectAll("text").style("font-size", "9px");
+  var cumYAxisG2 = cumG2.append("g");
+  cumG2.append("text").attr("transform", "rotate(-90)").attr("x", -cumH / 2).attr("y", -90).attr("text-anchor", "middle").style("font-size", "10px").text("Avg net gain at duration (LB-swing eq.)");
+  cumG2.append("text").attr("x", innerW / 2).attr("y", cumH + 46).attr("text-anchor", "middle").style("font-size", "11px").text("Duration worn (ticks)");
+  function getInputs() {
+    const v = (id2) => {
+      const n = parseFloat(document.getElementById(id2).value);
+      return isNaN(n) ? 0 : n;
+    };
+    return {
+      mhAvgHit: v("mh-avg-hit"),
+      mhAvgHitLb: v("mh-avg-hit-lb"),
+      mhSpeed: v("mh-speed"),
+      specAvgHit: v("spec-avg-hit"),
+      specSpeed: v("spec-speed"),
+      specCost: v("spec-cost")
+    };
+  }
+  function filteredCumulative(minTick) {
     let sum = 0;
     return perTickMean.map((v, i) => {
-      const tick = i + 1;
-      if (tick >= minTick && tick <= maxTick) {
+      if (i + 1 >= minTick) {
         sum += v;
         return sum;
       }
       return 0;
     });
   }
-  function update(minTick, maxTick) {
-    const leftW = xScale(minTick - 0.5);
+  function update(minTick) {
     if (minTick > 1) {
-      greyLeft.attr("x", 0).attr("width", leftW).attr("display", null);
+      greyLeft.attr("x", 0).attr("width", (minTick - 1) * CELL).attr("display", null);
     } else {
       greyLeft.attr("display", "none");
     }
-    const rightX = xScale(maxTick + 0.5);
-    if (maxTick < MAX_DURATION) {
-      greyRight.attr("x", rightX).attr("width", innerW - rightX).attr("display", null);
-    } else {
-      greyRight.attr("display", "none");
-    }
-    const filtCum = filteredCumulative(minTick, maxTick);
+    const filtCum = filteredCumulative(minTick);
     cumBars.attr("y", (_, i) => Math.min(yCum(0), yCum(filtCum[i]))).attr("height", (_, i) => Math.abs(yCum(filtCum[i]) - yCum(0))).attr("fill", (_, i) => {
-      const tick = i + 1;
-      if (tick < minTick || tick > maxTick) return "#cccccc";
+      if (i + 1 < minTick) return "#cccccc";
       return filtCum[i] >= 0 ? "#4477aa" : "#cc4444";
     });
     let bTick = null;
-    for (let i = minTick - 1; i < maxTick; i++) {
+    for (let i = minTick - 1; i < MAX_DURATION; i++) {
       if (filtCum[i] > 0) {
         bTick = i + 1;
         break;
       }
     }
     if (bTick !== null) {
-      const bx = xScale(bTick - 0.5);
+      const bx = (bTick - 1) * CELL;
       const sec = (bTick * 0.6).toFixed(1);
       heatBreakeven.attr("x1", bx).attr("x2", bx).attr("display", null);
       cumBreakeven.attr("x1", bx).attr("x2", bx).attr("display", null);
@@ -3373,32 +3447,147 @@
       breakevenLabel.attr("display", "none");
     }
   }
-  var minSlider = document.getElementById("min-slider");
-  var maxSlider = document.getElementById("max-slider");
-  var minLabel = document.getElementById("min-label");
-  var maxLabel = document.getElementById("max-label");
-  function labelText(ticks2) {
-    return `${ticks2} (${(ticks2 * 0.6).toFixed(1)}s)`;
+  function updateDps(minTick) {
+    const { mhAvgHit, mhAvgHitLb, mhSpeed, specAvgHit, specSpeed, specCost } = getInputs();
+    const mhDiff = mhAvgHit - mhAvgHitLb;
+    const hide = () => {
+      heatCells2.attr("fill", "#e8e8e8");
+      dpsPlaceholder.attr("display", null);
+      greyLeft2.attr("display", "none");
+      heatBreakeven2.attr("display", "none");
+      cumBreakeven2.attr("display", "none");
+      breakevenLabel2.attr("display", "none");
+      cumBars2.attr("y", yCum2(0)).attr("height", 0).attr("fill", "#cccccc");
+    };
+    if (specCost <= 0 || specSpeed <= 0 || mhSpeed <= 0 || mhDiff <= 0) {
+      hide();
+      return;
+    }
+    dpsPlaceholder.attr("display", "none");
+    const dmgPerSpec = specAvgHit - mhAvgHit * (specSpeed / mhSpeed);
+    const specScale = dmgPerSpec / (specCost * mhDiff);
+    let minVal = Infinity, maxVal = -Infinity;
+    for (let p = 0; p < NORMAL_THRESHOLD; p++) {
+      for (let d = 0; d < MAX_DURATION; d++) {
+        const v = netPct[p][d] * specScale;
+        if (v < minVal) minVal = v;
+        if (v > maxVal) maxVal = v;
+      }
+    }
+    const maxAbsVal = Math.max(Math.abs(minVal), Math.abs(maxVal), 1e-3);
+    const dpsColorScale = diverging(RdBu_default).domain([-maxAbsVal, 0, maxAbsVal]);
+    heatCells2.attr("fill", ({ p, d }) => dpsColorScale(netPct[p][d] * specScale));
+    const cbValScaleLb = linear2().domain([0, cbSteps - 1]).range([maxAbsVal, -maxAbsVal]);
+    cbRects2.attr("fill", (i) => dpsColorScale(cbValScaleLb(i)));
+    const cbAxisScaleLb = linear2().domain([maxAbsVal, -maxAbsVal]).range([0, heatH]);
+    const cbHalf = maxAbsVal / 2;
+    cbAxisG2.call(axisRight(cbAxisScaleLb).tickValues([-maxAbsVal, -cbHalf, 0, cbHalf, maxAbsVal]).tickFormat((d) => `${(+d).toFixed(1)}`)).selectAll("text").style("font-size", "9px");
+    const perTickMeanLb = perTickMean.map((v) => v * specScale);
+    const filtValsLb = perTickMeanLb.map((v, i) => i + 1 >= minTick ? v : 0);
+    const domainExtent = Math.max(
+      Math.abs(min(perTickMeanLb)),
+      Math.abs(max(perTickMeanLb))
+    ) * 1.1 || 1;
+    yCum2 = linear2().domain([-domainExtent, domainExtent]).range([cumH, 0]);
+    cumYAxisG2.call(axisLeft(yCum2).ticks(4).tickFormat((d) => `${(+d).toFixed(1)}`)).selectAll("text").style("font-size", "9px");
+    cumBaseline2.attr("y1", yCum2(0)).attr("y2", yCum2(0));
+    cumGridG2.selectAll("*").remove();
+    yCum2.ticks(4).forEach((t) => {
+      cumGridG2.append("line").attr("x1", 0).attr("x2", innerW).attr("y1", yCum2(t)).attr("y2", yCum2(t)).attr("stroke", "#ccc").attr("stroke-width", 0.5).attr("stroke-dasharray", "3,3");
+    });
+    cumBars2.attr("y", (_, i) => Math.min(yCum2(0), yCum2(filtValsLb[i]))).attr("height", (_, i) => Math.abs(yCum2(filtValsLb[i]) - yCum2(0))).attr("fill", (_, i) => {
+      if (i + 1 < minTick) return "#cccccc";
+      return filtValsLb[i] >= 0 ? "#4477aa" : "#cc4444";
+    });
+    if (minTick > 1) {
+      greyLeft2.attr("x", 0).attr("width", (minTick - 1) * CELL).attr("display", null);
+    } else {
+      greyLeft2.attr("display", "none");
+    }
+    let bTick2 = null;
+    for (let i = minTick - 1; i < MAX_DURATION; i++) {
+      if (filtValsLb[i] > 0) {
+        bTick2 = i + 1;
+        break;
+      }
+    }
+    if (bTick2 !== null) {
+      const bx2 = (bTick2 - 1) * CELL;
+      const sec2 = (bTick2 * 0.6).toFixed(1);
+      heatBreakeven2.attr("x1", bx2).attr("x2", bx2).attr("display", null);
+      cumBreakeven2.attr("x1", bx2).attr("x2", bx2).attr("display", null);
+      breakevenLabel2.attr("x", bx2 + 4).text(`Breakeven: ${bTick2} ticks (${sec2}s)`).attr("display", null);
+    } else {
+      heatBreakeven2.attr("display", "none");
+      cumBreakeven2.attr("display", "none");
+      breakevenLabel2.attr("display", "none");
+    }
   }
+  function updateText(minTick) {
+    const { mhAvgHit, mhAvgHitLb, mhSpeed, specAvgHit, specSpeed, specCost } = getInputs();
+    const el = document.getElementById("result-text");
+    const specDpt = specSpeed > 0 ? specAvgHit / specSpeed : null;
+    const mhDptDps = mhSpeed > 0 ? mhAvgHit / mhSpeed : null;
+    const mhDptLb = mhSpeed > 0 ? mhAvgHitLb / mhSpeed : null;
+    const mhLossDpt = mhDptDps !== null && mhDptLb !== null ? mhDptDps - mhDptLb : null;
+    const dmgPerSpec = specSpeed > 0 && mhSpeed > 0 ? specAvgHit - mhAvgHit * (specSpeed / mhSpeed) : null;
+    const mhDiff = mhAvgHit - mhAvgHitLb;
+    let netSwings = null;
+    if (specCost > 0 && dmgPerSpec !== null && mhDiff > 0 && mhSpeed > 0) {
+      const specScale = dmgPerSpec / (specCost * mhDiff);
+      netSwings = perTickMean[minTick - 1] * specScale;
+    }
+    const f1 = (v) => v !== null && isFinite(v) ? v.toFixed(1) : "\u2014";
+    const f2 = (v) => v !== null && isFinite(v) ? v.toFixed(2) : "\u2014";
+    el.innerHTML = `At <strong>${f1(specDpt)}</strong> damage/tick the special attack will deal <strong>${f1(dmgPerSpec)}</strong> increased damage over the mainhand swing (<strong>${f1(mhDptDps)}</strong> damage/tick with DPS ring). With LB equipped your mainhand averages <strong>${f1(mhDptLb)}</strong> damage/tick \u2014 a cost of <strong>${f1(mhLossDpt)}</strong> damage/tick vs the DPS ring. If you have the lightbearer equipped for a minimum of <strong>${minTick}</strong> ticks, you gain <strong>${f2(netSwings)}</strong> LB-swing equivalents of spec advantage on average \u2014 i.e. you could swing the mainhand with LB equipped that many more times before the spec gain is fully consumed by the ring DPS loss.`;
+  }
+  function updateAll(minTick) {
+    update(minTick);
+    updateDps(minTick);
+    updateText(minTick);
+  }
+  var minSlider = document.getElementById("min-slider");
+  var minLabel = document.getElementById("min-label");
+  var PARAM_MAP = {
+    "min-slider": "mt",
+    "mh-speed": "ms",
+    "mh-avg-hit": "mh",
+    "mh-avg-hit-lb": "ml",
+    "spec-speed": "ss",
+    "spec-avg-hit": "sh",
+    "spec-cost": "sc"
+  };
+  function saveToUrl() {
+    const params = new URLSearchParams();
+    for (const [id2, key] of Object.entries(PARAM_MAP)) {
+      const val = document.getElementById(id2).value;
+      if (val !== "") params.set(key, val);
+    }
+    history.replaceState(null, "", "?" + params.toString());
+  }
+  function restoreFromUrl() {
+    const params = new URLSearchParams(location.search);
+    for (const [id2, key] of Object.entries(PARAM_MAP)) {
+      const val = params.get(key);
+      if (val !== null) {
+        document.getElementById(id2).value = val;
+      }
+    }
+  }
+  restoreFromUrl();
+  var initialMin = parseInt(minSlider.value);
+  minLabel.textContent = `${initialMin} (${(initialMin * 0.6).toFixed(1)}s)`;
   minSlider.addEventListener("input", () => {
-    let min3 = parseInt(minSlider.value);
-    const max3 = parseInt(maxSlider.value);
-    if (min3 > max3) {
-      min3 = max3;
-      minSlider.value = String(min3);
-    }
-    minLabel.textContent = labelText(min3);
-    update(min3, max3);
-  });
-  maxSlider.addEventListener("input", () => {
     const min3 = parseInt(minSlider.value);
-    let max3 = parseInt(maxSlider.value);
-    if (max3 < min3) {
-      max3 = min3;
-      maxSlider.value = String(max3);
-    }
-    maxLabel.textContent = labelText(max3);
-    update(min3, max3);
+    minLabel.textContent = `${min3} (${(min3 * 0.6).toFixed(1)}s)`;
+    saveToUrl();
+    updateAll(min3);
   });
-  update(1, MAX_DURATION);
+  ["mh-avg-hit", "mh-avg-hit-lb", "mh-speed", "spec-avg-hit", "spec-speed", "spec-cost"].forEach((id2) => {
+    document.getElementById(id2).addEventListener("input", () => {
+      saveToUrl();
+      updateAll(parseInt(minSlider.value));
+    });
+  });
+  updateAll(initialMin);
 })();

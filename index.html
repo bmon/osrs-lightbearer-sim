@@ -5,51 +5,130 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lightbearer Sim</title>
   <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
     body {
       font-family: sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      margin: 0;
       padding: 24px;
       background: #f8f8f8;
     }
-    #heat-chart svg,
-    #cum-chart svg {
-      display: block;
-    }
-    #controls {
-      /* left-align with the chart data area: margin-left matches SVG margin.left (110px),
-         right side left alone — colorbar area has no slider */
-      width: 920px;
-      box-sizing: border-box;
-      padding: 10px 0 10px 110px;
+
+    #main {
       display: flex;
-      gap: 32px;
-      font-size: 13px;
+      gap: 24px;
+      align-items: flex-start;
     }
-    .slider-group {
+
+    /* chart fills all space left after the input panel */
+    #chart {
+      flex: 1;
+      min-width: 0;
+    }
+
+    #chart svg { display: block; }
+
+    #inputs {
+      flex-shrink: 0;
+      width: 300px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 16px;
+    }
+
+    .input-group {
       display: flex;
       flex-direction: column;
       gap: 5px;
+      font-size: 12px;
     }
-    .slider-group input[type="range"] {
-      width: 300px;
+
+    .input-group input[type="range"] { width: 100%; }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #666;
+      border-bottom: 1px solid #e8e8e8;
+      padding-bottom: 5px;
+    }
+
+    .field-row { display: flex; gap: 8px; }
+
+    .field {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .field label { font-size: 11px; color: #444; }
+
+    .field input[type="number"] {
+      width: 100%;
+      padding: 4px 6px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      font-size: 12px;
     }
   </style>
 </head>
 <body>
-  <div id="heat-chart"></div>
-  <div id="controls">
-    <div class="slider-group">
-      <label>Min ticks equipped: <strong id="min-label">1 (0.6s)</strong></label>
-      <input type="range" id="min-slider" min="1" max="150" value="1" />
+  <div id="main">
+
+    <div id="chart"></div>
+
+    <div id="inputs">
+      <div class="input-group">
+        <label>Min ticks equipped: <strong id="min-label">1 (0.6s)</strong></label>
+        <input type="range" id="min-slider" min="1" max="150" value="1" />
+      </div>
+
+      <div class="section-label">Mainhand</div>
+      <div class="field-row">
+        <div class="field">
+          <label>Speed</label>
+          <input type="number" id="mh-speed" step="1" min="1" placeholder="4" />
+        </div>
+        <div class="field">
+          <label>Avg hit (dps ring)</label>
+          <input type="number" id="mh-avg-hit" step="0.01" min="0" placeholder="0.0" />
+        </div>
+        <div class="field">
+          <label>Avg hit (lb)</label>
+          <input type="number" id="mh-avg-hit-lb" step="0.01" min="0" placeholder="0.0" />
+        </div>
+      </div>
+
+      <div class="section-label">Spec</div>
+      <div class="field-row">
+        <div class="field">
+          <label>Speed</label>
+          <input type="number" id="spec-speed" step="1" min="1" placeholder="4" />
+        </div>
+        <div class="field">
+          <label>Avg hit (dps ring)</label>
+          <input type="number" id="spec-avg-hit" step="0.01" min="0" placeholder="0.0" />
+        </div>
+        <div class="field">
+          <label>Cost (%)</label>
+          <input type="number" id="spec-cost" step="1" min="0" max="100" placeholder="50" />
+        </div>
+      </div>
+
+      <div class="section-label">Summary</div>
+      <p id="result-text" style="font-size:12px;color:#333;line-height:1.6;margin:0;">
+        Enter weapon stats above to see damage estimate.
+      </p>
     </div>
-    <div class="slider-group">
-      <label>Max ticks equipped: <strong id="max-label">150 (90.0s)</strong></label>
-      <input type="range" id="max-slider" min="1" max="150" value="150" />
-    </div>
+
   </div>
-  <div id="cum-chart"></div>
   <script src="dist/sim.js"></script>
 </body>
 </html>
